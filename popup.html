@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Hitarea Crop Copier</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Hitarea Crop Copier</h1>
+
+    <label for="hitarea">data-hitarea value</label>
+    <input id="hitarea" type="text" placeholder="tabHero" autocomplete="off" spellcheck="false" />
+
+    <button id="extract" type="button">Copy crop params</button>
+
+    <p id="status" class="status" role="status"></p>
+
+    <div id="result" class="result" hidden>
+      <code id="result-text"></code>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
