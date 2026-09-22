@@ -19,18 +19,40 @@ hitareaInput.addEventListener(`input`, () => {
   chrome.storage.local.set({ [STORAGE_KEY]: hitareaInput.value })
 })
 
-// Runs inside the page (via chrome.scripting.executeScript) — must be self-contained,
-// no closures over anything outside its own arguments.
-function extractCropFromPage(hitareaValue) {
-  const el = document.querySelector(`[data-hitarea="${hitareaValue}"]`)
-  if (!el) return null
+// Runs inside the page (via chrome.scripting.executeScript) — must be self-contained, no
+// closures over anything outside its own arguments. Walks light DOM + open shadow roots so a
+// shadow-DOM-based editor doesn't silently look like "nothing on the page".
+function inspectPage(hitareaValue) {
+  const withHitarea = []
+  const walk = (root) => {
+    if (!root || !root.querySelectorAll) return
+    for (const node of root.querySelectorAll(`*`)) {
+      if (node.hasAttribute(`data-hitarea`)) withHitarea.push(node)
+      if (node.shadowRoot) walk(node.shadowRoot)
+    }
+  }
+  walk(document)
 
-  const src = el.currentSrc || el.src || getComputedStyle(el).backgroundImage || ``
-  const match = src.match(/c_crop,[^/)"']+/)
-  if (!match) return null
+  const match = withHitarea.find((el) => el.getAttribute(`data-hitarea`) === hitareaValue)
 
-  // Strip a trailing ,fl_relative — that's appended at render time, not part of the stored crop.
-  return match[0].replace(/,fl_relative$/, ``)
+  if (!match) {
+    return {
+      frameUrl: location.href,
+      found: false,
+      seenValues: [...new Set(withHitarea.map((el) => el.getAttribute(`data-hitarea`)))],
+    }
+  }
+
+  const src = match.currentSrc || match.src || getComputedStyle(match).backgroundImage || ``
+  const cropMatch = src.match(/c_crop,[^/)"']+/)
+
+  return {
+    frameUrl: location.href,
+    found: true,
+    tagName: match.tagName,
+    src,
+    crop: cropMatch ? cropMatch[0].replace(/,fl_relative$/, ``) : null,
+  }
 }
 
 extractButton.addEventListener(`click`, async () => {
@@ -51,23 +73,45 @@ extractButton.addEventListener(`click`, async () => {
       return
     }
 
-    const results = await chrome.scripting.executeScript({
+    const injections = await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
-      func: extractCropFromPage,
+      func: inspectPage,
       args: [hitareaValue],
     })
 
-    const found = results.map((r) => r.result).find((r) => r)
+    const perFrame = injections.map((r) => r.result).filter(Boolean)
+    const matchWithCrop = perFrame.find((r) => r.found && r.crop)
+    const matchNoCrop = perFrame.find((r) => r.found && !r.crop)
+    const allSeenValues = [...new Set(perFrame.flatMap((r) => r.seenValues ?? []))]
 
-    if (!found) {
-      setStatus(`No element with data-hitarea="${hitareaValue}" (and a c_crop URL) found on this page.`, true)
+    if (matchWithCrop) {
+      await navigator.clipboard.writeText(matchWithCrop.crop)
+      resultTextEl.textContent = matchWithCrop.crop
+      resultEl.hidden = false
+      setStatus(`Copied to clipboard.`)
       return
     }
 
-    await navigator.clipboard.writeText(found)
-    resultTextEl.textContent = found
-    resultEl.hidden = false
-    setStatus(`Copied to clipboard.`)
+    if (matchNoCrop) {
+      setStatus(
+        `Found the <${matchNoCrop.tagName.toLowerCase()}> element, but its image URL has no crop transform yet — has it been cropped? (src: ${matchNoCrop.src.slice(0, 80)}…)`,
+        true
+      )
+      return
+    }
+
+    if (allSeenValues.length > 0) {
+      setStatus(
+        `No element with data-hitarea="${hitareaValue}" — found these values instead: ${allSeenValues.join(`, `)}`,
+        true
+      )
+      return
+    }
+
+    setStatus(
+      `No data-hitarea attributes found anywhere this extension could reach (${injections.length} frame(s) checked). It may be inside a frame this tab doesn't expose, or rendered after this check ran — try again once the crop preview has fully loaded.`,
+      true
+    )
   } catch (error) {
     setStatus(`Error: ${error.message}`, true)
   }
