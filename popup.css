@@ -35,7 +35,21 @@ input[type="text"] {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   border: 1px solid #ccc;
   border-radius: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+}
+
+.hint {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.hint code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: #eee;
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
 input[type="text"]:focus {

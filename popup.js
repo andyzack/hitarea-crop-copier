@@ -1,5 +1,7 @@
-const STORAGE_KEY = `hitarea`
+const STORAGE_KEYS = { hitarea: `hitarea`, host: `previewHost` }
+const DEFAULT_HOST = `stargate-nebula.netlify.app`
 
+const hostInput = document.getElementById(`host`)
 const hitareaInput = document.getElementById(`hitarea`)
 const extractButton = document.getElementById(`extract`)
 const statusEl = document.getElementById(`status`)
@@ -11,13 +13,36 @@ const setStatus = (message, isError = false) => {
   statusEl.classList.toggle(`error`, isError)
 }
 
-chrome.storage.local.get(STORAGE_KEY, (data) => {
-  hitareaInput.value = data[STORAGE_KEY] ?? `tabHero`
+chrome.storage.local.get([STORAGE_KEYS.hitarea, STORAGE_KEYS.host], (data) => {
+  hitareaInput.value = data[STORAGE_KEYS.hitarea] ?? `tabHero`
+  hostInput.value = data[STORAGE_KEYS.host] ?? DEFAULT_HOST
 })
 
 hitareaInput.addEventListener(`input`, () => {
-  chrome.storage.local.set({ [STORAGE_KEY]: hitareaInput.value })
+  chrome.storage.local.set({ [STORAGE_KEYS.hitarea]: hitareaInput.value })
 })
+
+hostInput.addEventListener(`input`, () => {
+  chrome.storage.local.set({ [STORAGE_KEYS.host]: hostInput.value })
+})
+
+// Turns "toyota-au.sesimi.app" or "https://toyota-au.sesimi.app/foo" into "https://toyota-au.sesimi.app/*".
+const hostToPattern = (host) => {
+  const trimmed = host
+    .trim()
+    .replace(/^https?:\/\//, ``)
+    .replace(/\/.*$/, ``)
+  return trimmed ? `https://${trimmed}/*` : null
+}
+
+// Requests host permission for the preview domain if we don't already have it. Must be called
+// from a user gesture (the click handler below qualifies) — chrome.permissions.request() throws
+// otherwise.
+const ensureHostPermission = async (pattern) => {
+  const already = await chrome.permissions.contains({ origins: [pattern] })
+  if (already) return true
+  return chrome.permissions.request({ origins: [pattern] })
+}
 
 // Runs inside the page (via chrome.scripting.executeScript) — must be self-contained, no
 // closures over anything outside its own arguments. Walks light DOM + open shadow roots so a
@@ -57,11 +82,28 @@ function inspectPage(hitareaValue) {
 
 extractButton.addEventListener(`click`, async () => {
   const hitareaValue = hitareaInput.value.trim()
+  const hostValue = hostInput.value.trim()
   resultEl.hidden = true
 
   if (!hitareaValue) {
     setStatus(`Enter a data-hitarea value first.`, true)
     return
+  }
+
+  const pattern = hostToPattern(hostValue)
+  if (pattern) {
+    setStatus(`Checking permission for ${hostValue}…`)
+    let granted
+    try {
+      granted = await ensureHostPermission(pattern)
+    } catch (error) {
+      setStatus(`Permission request failed: ${error.message}`, true)
+      return
+    }
+    if (!granted) {
+      setStatus(`Permission for ${hostValue} was declined — can't read that frame without it.`, true)
+      return
+    }
   }
 
   setStatus(`Searching the page…`)
