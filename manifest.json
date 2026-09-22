@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Hitarea Crop Copier",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Copy the Cloudinary crop parameters off a data-hitarea image on the current page.",
   "action": {
     "default_popup": "popup.html"
   },
-  "permissions": ["activeTab", "scripting", "storage"]
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://stargate-nebula.netlify.app/*"]
 }

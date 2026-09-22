@@ -21,6 +21,13 @@ c_crop,h_0.8627,w_0.5742,x_0.1054,y_0.0156
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and select this folder.
 
+Sesimi Studio renders the template preview inside a cross-origin iframe pointed at
+`stargate-nebula.netlify.app` (the `#stargate` iframe). `activeTab` alone only grants access to
+the tab's top-level origin (`studio.sesimi.app`), not to that iframe, so `manifest.json` explicitly
+lists `https://stargate-nebula.netlify.app/*` under `host_permissions` — without it, the extension
+can see the iframe exists but can't read anything inside it. If Studio ever moves the preview to a
+different host, update that entry to match.
+
 ## Use
 
 1. In Studio, pick the hero image and crop it for the placement you're working on.
